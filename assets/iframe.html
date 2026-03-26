@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+    <div id="loading">Loading...</div>
+
+    <div id="no-org" class="hidden">
+      <p class="muted">No organization associated with this requester.</p>
+    </div>
+
+    <div id="content" class="hidden">
+      <div class="org-name" id="org-name"></div>
+
+      <div id="read-mode">
+        <div id="notes-display" class="notes-box"></div>
+        <button id="edit-btn" class="btn btn-default">Edit</button>
+      </div>
+
+      <div id="edit-mode" class="hidden">
+        <textarea id="notes-input" class="notes-input" rows="8"></textarea>
+        <div class="btn-group">
+          <button id="save-btn" class="btn btn-primary">Save</button>
+          <button id="cancel-btn" class="btn btn-default">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="error" class="hidden">
+      <p class="error-text" id="error-text"></p>
+    </div>
+  </div>
+
+  <script src="https://static.zdassets.com/zendesk_app_framework_sdk/2.0/zaf_sdk.min.js"></script>
+  <script src="main.js"></script>
+</body>
+</html>

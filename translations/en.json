@@ -1,0 +1,8 @@
+{
+  "app": {
+    "name": "Org Notes",
+    "short_description": "View and edit organization notes from the ticket sidebar.",
+    "long_description": "Displays the organization's notes field directly in the ticket sidebar so agents can quickly see important context about the customer without navigating away.",
+    "installation_instructions": "No configuration required. Install and the app will appear in the ticket sidebar."
+  }
+}
