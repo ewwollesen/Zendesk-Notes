@@ -1,7 +1,8 @@
 {
   "name": "Org Notes",
   "author": {
-    "name": "Wayne"
+    "name": "Wayne",
+    "email": "wayne.wollesen@mattermost.com"
   },
   "defaultLocale": "en",
   "private": true,
