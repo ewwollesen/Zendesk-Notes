@@ -90,6 +90,24 @@ body {
   font-style: italic;
 }
 
+.updated-at {
+  color: #87929d;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.confirm-prompt {
+  font-size: 13px;
+  color: #2f3941;
+  align-self: center;
+}
+
+.edit-notice {
+  color: #87929d;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
 .error-text {
   color: #cc3340;
 }

@@ -3,6 +3,8 @@
 
   var orgId = null;
   var currentNotes = '';
+  var canEdit = false;
+  var orgUpdatedAt = null;
 
   var $loading = document.getElementById('loading');
   var $noOrg = document.getElementById('no-org');
@@ -17,6 +19,12 @@
   var $editBtn = document.getElementById('edit-btn');
   var $saveBtn = document.getElementById('save-btn');
   var $cancelBtn = document.getElementById('cancel-btn');
+  var $updatedAt = document.getElementById('updated-at');
+  var $editNotice = document.getElementById('edit-notice');
+  var $editButtons = document.getElementById('edit-buttons');
+  var $confirmButtons = document.getElementById('confirm-buttons');
+  var $confirmSaveBtn = document.getElementById('confirm-save-btn');
+  var $confirmBackBtn = document.getElementById('confirm-back-btn');
 
   function show(el) { el.classList.remove('hidden'); }
   function hide(el) { el.classList.add('hidden'); }
@@ -27,6 +35,13 @@
     hide($noOrg);
     $errorText.textContent = msg;
     show($error);
+  }
+
+  function renderUpdatedAt() {
+    if (!orgUpdatedAt) return;
+    var d = new Date(orgUpdatedAt);
+    $updatedAt.textContent = 'Last updated: ' + d.toLocaleString();
+    show($updatedAt);
   }
 
   function renderNotes(notes) {
@@ -43,6 +58,9 @@
   function enterReadMode() {
     show($readMode);
     hide($editMode);
+    hide($editNotice);
+    hide($confirmButtons);
+    show($editButtons);
     client.invoke('resize', { width: '100%', height: document.body.scrollHeight + 20 + 'px' });
   }
 
@@ -50,34 +68,107 @@
     $notesInput.value = currentNotes;
     hide($readMode);
     show($editMode);
+    show($editNotice);
     $notesInput.focus();
     client.invoke('resize', { width: '100%', height: document.body.scrollHeight + 20 + 'px' });
   }
 
-  $editBtn.addEventListener('click', enterEditMode);
+  $editBtn.addEventListener('click', function () {
+    if (!canEdit) return;
+    enterEditMode();
+  });
   $cancelBtn.addEventListener('click', enterReadMode);
 
   $saveBtn.addEventListener('click', function () {
-    var newNotes = $notesInput.value;
-    $saveBtn.disabled = true;
-    $saveBtn.textContent = 'Saving...';
+    if (!canEdit) return;
+    hide($editButtons);
+    show($confirmButtons);
+    client.invoke('resize', { width: '100%', height: document.body.scrollHeight + 20 + 'px' });
+  });
 
+  $confirmBackBtn.addEventListener('click', function () {
+    hide($confirmButtons);
+    show($editButtons);
+    client.invoke('resize', { width: '100%', height: document.body.scrollHeight + 20 + 'px' });
+  });
+
+  $confirmSaveBtn.addEventListener('click', function () {
+    if (!canEdit) return;
+    var newNotes = $notesInput.value;
+    $confirmSaveBtn.disabled = true;
+    $confirmSaveBtn.textContent = 'Saving...';
+
+    // Fetch current org state to check for concurrent edits
     client.request({
       url: '/api/v2/organizations/' + orgId + '.json',
-      type: 'PUT',
-      contentType: 'application/json',
-      data: JSON.stringify({ organization: { notes: newNotes } })
-    }).then(function () {
-      renderNotes(newNotes);
-      enterReadMode();
+      type: 'GET'
+    }).then(function (data) {
+      var latest = data.organization;
+      if (orgUpdatedAt && latest.updated_at !== orgUpdatedAt) {
+        // Org was modified since we last loaded — surface the conflict
+        orgUpdatedAt = latest.updated_at;
+        currentNotes = latest.notes || '';
+        var msg = 'This organization was updated by someone else since you started editing. ' +
+          'Your changes have NOT been saved. Please review the latest notes and try again.';
+        renderNotes(currentNotes);
+        renderUpdatedAt();
+        enterReadMode();
+        showError(msg);
+        return;
+      }
+
+      return client.request({
+        url: '/api/v2/organizations/' + orgId + '.json',
+        type: 'PUT',
+        contentType: 'application/json',
+        data: JSON.stringify({ organization: { notes: newNotes } })
+      }).then(function (resp) {
+        orgUpdatedAt = resp.organization.updated_at;
+        renderNotes(newNotes);
+        renderUpdatedAt();
+        enterReadMode();
+      });
     }).catch(function (err) {
-      showError('Failed to save notes. Please try again.');
+      if (err.status === 403) {
+        showError('You do not have permission to edit organization notes.');
+      } else {
+        showError('Failed to save notes. Please try again.');
+      }
       console.error(err);
     }).finally(function () {
-      $saveBtn.disabled = false;
-      $saveBtn.textContent = 'Save';
+      $confirmSaveBtn.disabled = false;
+      $confirmSaveBtn.textContent = 'Confirm';
+      hide($confirmButtons);
+      show($editButtons);
     });
   });
+
+  function checkEditPermission() {
+    return client.get('currentUser.role').then(function (data) {
+      var role = data['currentUser.role'];
+      if (role === 'admin') {
+        return true;
+      }
+      if (role !== 'agent') {
+        return false;
+      }
+      // For agents, check if they have a restricted custom role
+      return client.get('currentUser.customRole').then(function (roleData) {
+        var customRole = roleData['currentUser.customRole'];
+        // No custom role means a full agent (default permissions)
+        if (!customRole) return true;
+        // Custom roles with 'light_agent' in the name are restricted
+        var config = customRole.configuration || {};
+        // organization_editing is false for light/restricted roles
+        if (config.organization_editing === false) return false;
+        return true;
+      }).catch(function () {
+        // If we can't determine custom role, default to allowing
+        // and let the API enforce permissions on save
+        return true;
+      });
+    });
+  }
 
   // Load org data
   client.get('ticket.requester.id').then(function (data) {
@@ -97,12 +188,20 @@
 
     var org = orgs[0];
     orgId = org.id;
+    orgUpdatedAt = org.updated_at;
     $orgName.textContent = org.name;
     renderNotes(org.notes);
+    renderUpdatedAt();
 
-    hide($loading);
-    show($content);
-    enterReadMode();
+    return checkEditPermission().then(function (hasEdit) {
+      canEdit = hasEdit;
+      if (!canEdit) {
+        hide($editBtn);
+      }
+      hide($loading);
+      show($content);
+      enterReadMode();
+    });
   }).catch(function (err) {
     showError('Failed to load organization data.');
     console.error(err);
